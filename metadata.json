@@ -1,0 +1,11 @@
+{
+  "name": "RoomSense AI",
+  "description": "A secure, browser-based smart room sensor node and analytics dashboard powered by local canvas motion/audio detection and Gemini AI scene intelligence.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
