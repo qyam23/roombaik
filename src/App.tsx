@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Shield, LayoutDashboard, Terminal, Settings, Radio, Cpu, Bell, CheckCircle, Wifi, Heart } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { SensorStatus, DetectionEvent, ThresholdSettings } from "./types";
@@ -7,6 +7,7 @@ import SensorNode from "./components/SensorNode";
 import Dashboard from "./components/Dashboard";
 import EventsTable from "./components/EventsTable";
 import ControlSettings from "./components/ControlSettings";
+import { apiFetch, getAccessKey } from "./api";
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<"sensor" | "dashboard" | "logs" | "settings">("sensor");
@@ -31,16 +32,18 @@ export default function App() {
     captureOnMotion: true,
     captureOnSound: true,
     retentionDays: 7,
-    enableGeminiAlerts: true,
-    geminiAnalysisOnDemand: true
+    enableExternalAi: false,
+    aiAnalysisOnDemand: true,
+    aiProviderLabel: "OpenAI-compatible",
+    aiModel: "local-rules"
   });
 
   // Recent banner alert notification state
   const [activeAlert, setActiveAlert] = useState<DetectionEvent | null>(null);
 
-  const fetchStatus = async () => {
+  const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch("/api/status");
+      const res = await apiFetch("/api/status");
       const data = await res.json();
       setCurrentStatus(prev => ({
         ...prev,
@@ -49,39 +52,39 @@ export default function App() {
     } catch (e) {
       console.error("Failed fetching standard operational status:", e);
     }
-  };
+  }, []);
 
-  const fetchEvents = async () => {
+  const fetchEvents = useCallback(async () => {
     try {
-      const res = await fetch("/api/events");
+      const res = await apiFetch("/api/events");
       const data = await res.json();
       setEvents(data);
     } catch (e) {
       console.error("Failed fetching occurrences logs:", e);
     }
-  };
+  }, []);
 
-  const fetchSettings = async () => {
+  const fetchSettings = useCallback(async () => {
     try {
-      const res = await fetch("/api/settings");
+      const res = await apiFetch("/api/settings");
       const data = await res.json();
       setSettings(data);
     } catch (e) {
       console.error("Failed fetching settings parameters:", e);
     }
-  };
+  }, []);
 
-  const syncStatusChange = (updated: Partial<SensorStatus>) => {
+  const syncStatusChange = useCallback((updated: Partial<SensorStatus>) => {
     setCurrentStatus(prev => ({
       ...prev,
       ...updated
     }));
-  };
+  }, []);
 
   // Helper: Trigger event creation and push to backend
-  const handleEventTriggered = async (eventData: Omit<DetectionEvent, "id" | "timestampMs">) => {
+  const handleEventTriggered = useCallback(async (eventData: Omit<DetectionEvent, "id" | "timestampMs">) => {
     try {
-      const res = await fetch("/api/events", {
+      const res = await apiFetch("/api/events", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(eventData)
@@ -118,11 +121,11 @@ export default function App() {
     } catch (e) {
       console.error("Failed synchronizing logged events:", e);
     }
-  };
+  }, []);
 
   const handleClearLogs = async () => {
     try {
-      const res = await fetch("/api/events", { method: "DELETE" });
+      const res = await apiFetch("/api/events", { method: "DELETE" });
       const data = await res.json();
       if (data.success) {
         fetchEvents();
@@ -134,6 +137,7 @@ export default function App() {
 
   // Initial Boot loader
   useEffect(() => {
+    getAccessKey();
     fetchStatus();
     fetchEvents();
     fetchSettings();
@@ -146,7 +150,7 @@ export default function App() {
       clearInterval(statusTimer);
       clearInterval(eventsTimer);
     };
-  }, []);
+  }, [fetchEvents, fetchSettings, fetchStatus]);
 
   return (
     <div className="min-h-screen bg-[#080a0d] text-slate-100 flex flex-col font-sans select-none selection:bg-blue-600/30">
@@ -218,7 +222,7 @@ export default function App() {
             <div className="flex items-center gap-1.5 bg-slate-900 border border-slate-850/60 p-2 rounded-xl">
               <Wifi className="w-3.5 h-3.5 text-blue-400" />
               <span className="text-slate-205">
-                API GATE: ACTIVE
+                MODE: {currentStatus.localOnly === false ? "AI API READY" : "LOCAL ONLY"}
               </span>
             </div>
           </div>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Camera, CameraOff, Volume2, VolumeX, Shield, Play, Square, Settings, Wifi } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { ThresholdSettings, SensorStatus, DetectionEvent } from "../types";
+import { apiFetch } from "../api";
 
 interface SensorNodeProps {
   settings: ThresholdSettings;
@@ -78,7 +79,7 @@ export default function SensorNode({
       });
 
       // Synchronize with API backend express server
-      await fetch("/api/status", {
+      await apiFetch("/api/status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -144,7 +145,7 @@ export default function SensorNode({
     });
 
     // Notify backend
-    await fetch("/api/status", {
+    await apiFetch("/api/status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -317,7 +318,7 @@ export default function SensorNode({
         const dataUrl = snapCanvas.toDataURL("image/jpeg", 0.7);
         
         // POST base64 data to Express API Store
-        await fetch("/api/upload-frame", {
+        await apiFetch("/api/upload-frame", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ dataUrl, reason: triggerReason })

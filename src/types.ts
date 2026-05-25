@@ -27,6 +27,8 @@ export interface SensorStatus {
   latestEventTime: number | null;
   currentAudioLevel: number;
   currentMotionLevel: number;
+  externalAiActive?: boolean;
+  localOnly?: boolean;
 }
 
 export interface ThresholdSettings {
@@ -35,6 +37,32 @@ export interface ThresholdSettings {
   captureOnMotion: boolean;
   captureOnSound: boolean;
   retentionDays: number;
-  enableGeminiAlerts: boolean;
-  geminiAnalysisOnDemand: boolean;
+  enableExternalAi: boolean;
+  aiAnalysisOnDemand: boolean;
+  aiProviderLabel: string;
+  aiModel: string;
+}
+
+export interface AiUsageCall {
+  id: string;
+  timestampMs: number;
+  provider: string;
+  model: string;
+  feature: "summary" | "vision" | "local";
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  bytesIn: number;
+  bytesOut: number;
+  status: "ok" | "fallback" | "error";
+}
+
+export interface AiUsageSummary {
+  requests: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  bytesIn: number;
+  bytesOut: number;
+  recentCalls: AiUsageCall[];
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Settings, Save, RefreshCw, Cpu, Volume2, ShieldAlert, Sparkles, CheckCircle } from "lucide-react";
 import { ThresholdSettings } from "../types";
+import { apiFetch } from "../api";
 
 interface ControlSettingsProps {
   onSettingsSaved: (settings: ThresholdSettings) => void;
@@ -13,8 +14,10 @@ export default function ControlSettings({ onSettingsSaved }: ControlSettingsProp
     captureOnMotion: true,
     captureOnSound: true,
     retentionDays: 7,
-    enableGeminiAlerts: true,
-    geminiAnalysisOnDemand: true
+    enableExternalAi: false,
+    aiAnalysisOnDemand: true,
+    aiProviderLabel: "OpenAI-compatible",
+    aiModel: "local-rules"
   });
   
   const [saving, setSaving] = useState(false);
@@ -24,7 +27,7 @@ export default function ControlSettings({ onSettingsSaved }: ControlSettingsProp
   const fetchSettings = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/settings");
+      const res = await apiFetch("/api/settings");
       const data = await res.json();
       setSettings(data);
     } catch (e) {
@@ -38,7 +41,7 @@ export default function ControlSettings({ onSettingsSaved }: ControlSettingsProp
     setSaving(true);
     setMsg(null);
     try {
-      const res = await fetch("/api/settings", {
+      const res = await apiFetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(settings)
@@ -183,7 +186,7 @@ export default function ControlSettings({ onSettingsSaved }: ControlSettingsProp
             </p>
             <select
               value={settings.retentionDays}
-              onChange={(e) => setSettings({ ...settings, retentionDays: parseInt(e.target.value, 15) })}
+              onChange={(e) => setSettings({ ...settings, retentionDays: parseInt(e.target.value, 10) })}
               className="w-full bg-slate-900 border border-slate-800 text-slate-200 py-2.5 px-3 rounded-lg text-xs md:text-sm focus:outline-none focus:border-blue-500 cursor-pointer"
             >
               <option value="3">3 Days (Optimized Memory)</option>
@@ -192,25 +195,43 @@ export default function ControlSettings({ onSettingsSaved }: ControlSettingsProp
             </select>
           </div>
 
-          {/* Gemini toggle alert rules */}
+          {/* Optional AI provider rules */}
           <div className="bg-slate-950/30 border border-slate-850 p-5 rounded-xl space-y-3">
             <span className="text-xs font-bold font-display uppercase tracking-wider text-slate-400 block">AI Intelligent Analytics</span>
             <p className="text-xs text-slate-500">
-              Integrate Google Gemini LLM API to summarize local telemetry events and perform multimodal vision inspections.
+              Default is private local rules. Enable this only after configuring an OpenAI-compatible endpoint in .env.local.
             </p>
             <div className="flex items-center justify-between pb-1">
               <span className="text-xs text-slate-300 font-display flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                Contextual Gemini Summaries
+                External AI Summaries & Vision
               </span>
               <label className="relative inline-flex items-center cursor-pointer select-none">
                 <input
                   type="checkbox"
-                  checked={settings.enableGeminiAlerts}
-                  onChange={(e) => setSettings({ ...settings, enableGeminiAlerts: e.target.checked })}
+                  checked={settings.enableExternalAi}
+                  onChange={(e) => setSettings({ ...settings, enableExternalAi: e.target.checked })}
                   className="sr-only peer"
                 />
                 <div className="w-9 h-5 bg-slate-800 rounded-full peer peer-focus:ring-0 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-slate-300 after:border-slate-800 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="space-y-1">
+                <span className="text-[10px] font-mono uppercase text-slate-500">Provider Label</span>
+                <input
+                  value={settings.aiProviderLabel}
+                  onChange={(e) => setSettings({ ...settings, aiProviderLabel: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-800 text-slate-200 py-2 px-3 rounded-lg text-xs focus:outline-none focus:border-blue-500"
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-[10px] font-mono uppercase text-slate-500">Model Name</span>
+                <input
+                  value={settings.aiModel}
+                  onChange={(e) => setSettings({ ...settings, aiModel: e.target.value })}
+                  className="w-full bg-slate-900 border border-slate-800 text-slate-200 py-2 px-3 rounded-lg text-xs focus:outline-none focus:border-blue-500"
+                />
               </label>
             </div>
           </div>

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Sparkles, Image, RefreshCw, AlertTriangle, CheckCircle, ShieldAlert, Cpu, Eye, Hourglass, Terminal } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { SensorStatus, DetectionEvent } from "../types";
+import { AiUsageSummary, SensorStatus, DetectionEvent } from "../types";
+import { apiFetch } from "../api";
 
 interface DashboardProps {
   currentStatus: SensorStatus;
@@ -9,14 +10,14 @@ interface DashboardProps {
   onTriggerSummary: () => void;
 }
 
-interface GeminiSummaryResponse {
+interface AiSummaryResponse {
   summary: string;
   importantChanges: string[];
   attentionRequired: boolean;
   reason: string;
 }
 
-interface GeminiVisionResponse {
+interface AiVisionResponse {
   objects: string[];
   anomalies: string[];
   safetyCheckResult: string;
@@ -28,24 +29,25 @@ export default function Dashboard({ currentStatus, events }: DashboardProps) {
   const [frameTimestamp, setFrameTimestamp] = useState<number | null>(null);
   
   // State for AI Intelligence Summary
-  const [summaryData, setSummaryData] = useState<GeminiSummaryResponse | null>(null);
+  const [summaryData, setSummaryData] = useState<AiSummaryResponse | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
 
   // State for AI Vision Inspection
-  const [visionData, setVisionData] = useState<GeminiVisionResponse | null>(null);
+  const [visionData, setVisionData] = useState<AiVisionResponse | null>(null);
   const [visionLoading, setVisionLoading] = useState(false);
   const [visionError, setVisionError] = useState<string | null>(null);
 
-  // Health check of Gemini keys
-  const [geminiHealth, setGeminiHealth] = useState<{ configured: boolean; details: string }>({
+  // Health check of optional external AI keys
+  const [aiHealth, setAiHealth] = useState<{ configured: boolean; details: string; provider?: string; model?: string; localOnly?: boolean }>({
     configured: false,
     details: ""
   });
+  const [aiUsage, setAiUsage] = useState<AiUsageSummary | null>(null);
 
   const fetchLatestFrame = async () => {
     try {
-      const res = await fetch("/api/latest-frame");
+      const res = await apiFetch("/api/latest-frame");
       const data = await res.json();
       if (data.frame) {
         setLatestFrame(data.frame);
@@ -58,24 +60,35 @@ export default function Dashboard({ currentStatus, events }: DashboardProps) {
     }
   };
 
-  const fetchGeminiHealth = async () => {
+  const fetchAiHealth = async () => {
     try {
-      const res = await fetch("/api/gemini/health");
+      const res = await apiFetch("/api/ai/health");
       const data = await res.json();
-      setGeminiHealth(data);
+      setAiHealth(data);
     } catch (e) {
       console.error("Failed fetching credentials check status:", e);
     }
   };
 
-  const runGeminiSummary = async () => {
+  const fetchAiUsage = async () => {
+    try {
+      const res = await apiFetch("/api/ai/usage");
+      const data = await res.json();
+      setAiUsage(data);
+    } catch (e) {
+      console.error("Failed fetching AI usage metrics:", e);
+    }
+  };
+
+  const runAiSummary = async () => {
     setSummaryLoading(true);
     setSummaryError(null);
     try {
-      const res = await fetch("/api/summarize", { method: "POST" });
+      const res = await apiFetch("/api/summarize", { method: "POST" });
       if (!res.ok) throw new Error("Backend server returned an error.");
       const data = await res.json();
       setSummaryData(data);
+      fetchAiUsage();
     } catch (e: any) {
       setSummaryError(e.message || "Failed running summary analysis. Please adjust API key settings.");
     } finally {
@@ -88,7 +101,7 @@ export default function Dashboard({ currentStatus, events }: DashboardProps) {
     setVisionLoading(true);
     setVisionError(null);
     try {
-      const res = await fetch("/api/analyze-frame", {
+      const res = await apiFetch("/api/analyze-frame", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ frameBase64: latestFrame })
@@ -96,6 +109,7 @@ export default function Dashboard({ currentStatus, events }: DashboardProps) {
       if (!res.ok) throw new Error("Backend server failed to process the inspection.");
       const data = await res.json();
       setVisionData(data);
+      fetchAiUsage();
     } catch (e: any) {
       setVisionError(e.message || "Failed examining baseline frame.");
     } finally {
@@ -105,7 +119,8 @@ export default function Dashboard({ currentStatus, events }: DashboardProps) {
 
   useEffect(() => {
     fetchLatestFrame();
-    fetchGeminiHealth();
+    fetchAiHealth();
+    fetchAiUsage();
     // Setup automated interval to fetch snapshots from server store
     const timer = setInterval(fetchLatestFrame, 3500);
     return () => clearInterval(timer);
@@ -150,32 +165,33 @@ export default function Dashboard({ currentStatus, events }: DashboardProps) {
           <Terminal className="w-8 h-8 text-blue-500" />
         </div>
 
-        {/* Gemini Engine Check */}
+        {/* AI Engine Check */}
         <div className="bg-slate-900/40 border border-slate-800/80 p-5 rounded-2xl flex items-center justify-between backdrop-blur-md">
           <div className="space-y-1">
-            <span className="text-[10px] font-mono tracking-wider text-slate-500 uppercase">Gemini Intel Engine</span>
-            <div className={`text-sm font-display font-medium ${geminiHealth.configured ? "text-blue-400 font-semibold" : "text-slate-400"}`}>
-              {geminiHealth.configured ? "API Core Operational" : "Local Rules Fallback"}
+            <span className="text-[10px] font-mono tracking-wider text-slate-500 uppercase">Optional AI Engine</span>
+            <div className={`text-sm font-display font-medium ${aiHealth.configured ? "text-blue-400 font-semibold" : "text-emerald-400"}`}>
+              {aiHealth.configured ? "External API Enabled" : "Private Local Mode"}
             </div>
+            <div className="text-[10px] text-slate-500 font-mono">{aiHealth.model || "local-rules"}</div>
           </div>
-          <Sparkles className={`w-6 h-6 ${geminiHealth.configured ? "text-blue-400 animate-bounce" : "text-slate-600"}`} />
+          <Sparkles className={`w-6 h-6 ${aiHealth.configured ? "text-blue-400 animate-bounce" : "text-emerald-500"}`} />
         </div>
       </div>
 
-      {/* 2. Gemini Live Room Summary Panel */}
+      {/* 2. AI Live Room Summary Panel */}
       <div className="bg-slate-900/30 border border-slate-850 p-6 rounded-2xl relative overflow-hidden">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
           <div>
             <h3 className="text-base font-display font-medium text-slate-100 flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-blue-400" />
-              Gemini AI Intelligent Ambient Summary
+              Private AI Ambient Summary
             </h3>
             <p className="text-xs text-slate-500 font-sans mt-0.5">
-              Processes chronological telemetry logs locally to synthesize room occurrences and risk vectors.
+              Uses local rules by default. External AI only runs if you enable and configure an OpenAI-compatible endpoint.
             </p>
           </div>
           <button
-            onClick={runGeminiSummary}
+            onClick={runAiSummary}
             disabled={summaryLoading}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600/90 hover:bg-blue-600 text-white font-medium font-display text-sm disabled:opacity-50 transition cursor-pointer"
           >
@@ -204,7 +220,7 @@ export default function Dashboard({ currentStatus, events }: DashboardProps) {
                 <span className="w-2.5 h-2.5 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
               </div>
               <p className="text-xs text-slate-400 font-mono tracking-wider">
-                TRANSLATING LOCAL SECURITY LOG ARRAYS VIA MODEL_3.5_FLASH...
+                ANALYZING LOCAL SECURITY LOG ARRAYS...
               </p>
             </motion.div>
           ) : summaryData ? (
@@ -264,7 +280,40 @@ export default function Dashboard({ currentStatus, events }: DashboardProps) {
         </AnimatePresence>
       </div>
 
-      {/* 3. Visual Snapshot & Gemini Vision Check Column Split */}
+      {/* 3. AI Traffic Meter */}
+      <div className="bg-slate-900/30 border border-slate-850 p-6 rounded-2xl">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+          <div>
+            <h3 className="text-base font-display font-medium text-slate-100 flex items-center gap-2">
+              <Cpu className="w-5 h-5 text-emerald-400" />
+              AI Token & Traffic Meter
+            </h3>
+            <p className="text-xs text-slate-500 font-sans mt-0.5">
+              Counts estimated local fallback tokens and real provider usage when an external API returns usage metadata.
+            </p>
+          </div>
+          <button onClick={fetchAiUsage} className="text-xs text-slate-400 flex items-center gap-1 hover:text-slate-100 cursor-pointer">
+            <RefreshCw className="w-3 h-3" />
+            Refresh Usage
+          </button>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-xs">
+          {[
+            ["Requests", aiUsage?.requests ?? 0],
+            ["Prompt Tokens", aiUsage?.promptTokens ?? 0],
+            ["Output Tokens", aiUsage?.completionTokens ?? 0],
+            ["Bytes In", aiUsage?.bytesIn ?? 0],
+            ["Bytes Out", aiUsage?.bytesOut ?? 0]
+          ].map(([label, value]) => (
+            <div key={label} className="bg-slate-950/40 border border-slate-850 p-4 rounded-xl">
+              <span className="text-[10px] uppercase tracking-wider text-slate-500 font-mono block">{label}</span>
+              <span className="text-lg text-slate-100 font-display font-semibold">{Number(value).toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 4. Visual Snapshot & AI Vision Check Column Split */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
         {/* Left Side: Capture Frame View */}
@@ -306,17 +355,17 @@ export default function Dashboard({ currentStatus, events }: DashboardProps) {
           </div>
         </div>
 
-        {/* Right Side: Gemini Vision Analysis Module */}
+        {/* Right Side: AI Vision Analysis Module */}
         <div className="bg-slate-900/40 border border-slate-800/80 p-6 rounded-2xl flex flex-col justify-between backdrop-blur-md">
           <div>
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-base font-display font-medium text-slate-100 flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-blue-400" />
-                Gemini Vision Scene Inspection
+                AI Vision Scene Inspection
               </h3>
             </div>
             <p className="text-xs text-slate-500 font-sans mb-4">
-              Feeds the latest captured image snapshot to Gemini to perform full object mapping and anomaly checks.
+              Keeps the frame local unless an external provider is explicitly configured and enabled.
             </p>
           </div>
 
@@ -330,7 +379,7 @@ export default function Dashboard({ currentStatus, events }: DashboardProps) {
                     <span className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
                   </div>
                   <p className="text-xs text-slate-400 font-mono tracking-wider uppercase">
-                    Analyzing JPEG headers via Gemini Vision Multimodal...
+                    Inspecting snapshot through the configured AI path...
                   </p>
                 </div>
               ) : visionData ? (
@@ -374,7 +423,7 @@ export default function Dashboard({ currentStatus, events }: DashboardProps) {
                       <div className="space-y-1">
                         {visionData.anomalies.map((anom, i) => (
                           <div key={i} className="text-red-300 flex items-start gap-1">
-                            <span className="mt-0.5 shrink-0 text-red-400">●</span>
+                            <span className="mt-0.5 shrink-0 text-red-400">!</span>
                             <span>{anom}</span>
                           </div>
                         ))}
@@ -398,7 +447,7 @@ export default function Dashboard({ currentStatus, events }: DashboardProps) {
               className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-indigo-650 hover:bg-indigo-600 disabled:opacity-40 disabled:hover:bg-indigo-650 text-white font-medium font-display text-sm transition cursor-pointer"
             >
               <Sparkles className="w-4 h-4" />
-              <span>Inspect Latest Frame with Gemini Vision</span>
+              <span>Inspect Latest Frame</span>
             </button>
           </div>
         </div>
